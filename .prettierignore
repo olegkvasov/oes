@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+yarn.lock
+documentation/Tasks.md
+documentation/performance/report.md
+tests/.artifacts/
