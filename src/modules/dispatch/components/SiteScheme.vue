@@ -159,7 +159,9 @@ onUnmounted(() => cancelAnimationFrame(frame));
 <style scoped>
 canvas {
   width: 100%;
-  height: 480px;
+  height: 100%;
+  position: absolute;
+  inset: 0;
   display: block;
   background: #11272b;
   border-radius: 6px;

@@ -41,135 +41,127 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
         <path d="m9 17 3-5 3 5" stroke="currentColor" stroke-width="2" />
       </svg>
     </span>
-    <div class="user-profile">
-      <span class="user-avatar" aria-hidden="true">{{ me?.name.charAt(0) ?? '—' }}</span>
-      <div>
-        {{ me?.name ?? 'Загрузка пользователя'
-        }}<span>{{ me?.role === 'observer' ? 'Наблюдатель' : 'Диспетчер' }}</span>
-      </div>
-    </div>
-  </header>
-  <main id="workspace" tabindex="-1">
-    <div class="heading">
-      <div>
-        <div class="eyebrow">Диспетчерская <span>/</span> Мониторинг</div>
-        <h1>Обзор площадки</h1>
-      </div>
+    <div class="header-account">
       <div class="site-clock">
         <small>Время площадки</small>
         <time>{{ me ? siteTime(new Date(now).toISOString(), me.site.tz) : '—' }}</time>
         <span>{{ me?.site.tz }}</span>
       </div>
+      <div class="user-profile">
+        <span class="user-avatar" aria-hidden="true">{{ me?.name.charAt(0) ?? '—' }}</span>
+        <div>
+          {{ me?.name ?? 'Загрузка пользователя'
+          }}<span>{{ me?.role === 'observer' ? 'Наблюдатель' : 'Диспетчер' }}</span>
+        </div>
+      </div>
     </div>
+  </header>
+  <main id="workspace" tabindex="-1">
     <div v-if="connectionError" class="alert" role="status">{{ connectionError }}</div>
     <div v-if="error" class="alert" role="alert">
       {{ error }}
       <button v-if="retry" :disabled="busy" @click="emit('retry')">Повторить команду</button>
     </div>
     <div class="workspace">
-      <div class="site-column">
-        <section class="panel map-panel" aria-labelledby="map-title">
-          <div class="section-title">
-            <h2 id="map-title">Мониторинг техники</h2>
-            <span class="panel-tag">Локальная схема · 6 × 4 км</span>
+      <section class="panel points-panel" aria-labelledby="points-title">
+        <div class="section-title">
+          <div>
+            <span class="section-kicker">ПУНКТЫ И ОЧЕРЕДИ</span>
+            <h2 id="points-title">Пункты погрузки</h2>
           </div>
-          <div class="map-filters" role="group" aria-label="Состояние техники на карте">
-            <button
-              v-for="filter in mapFilters"
-              :key="filter.value"
-              type="button"
-              :aria-pressed="mapFilter === filter.value"
-              @click="emit('map-filter', filter.value)"
-            >
-              <span
-                v-if="filter.value !== 'all'"
-                class="state-dot"
-                :class="filter.value"
-                aria-hidden="true"
-              ></span>
-              {{ filter.label }}
-            </button>
-          </div>
-          <div class="map-view">
-            <SiteScheme
-              v-if="state"
-              :vehicles="mapVehicles"
-              :points="state.points"
-              :now="now"
-              :show-vehicle-names="showVehicleNames"
-            />
-            <div v-else class="map-loading" role="status">Подключение к площадке…</div>
-            <p v-if="state && !mapVehicles.length" class="map-empty" role="status">
-              Нет техники с выбранным состоянием
-              <button
-                v-if="mapFilter !== 'all'"
-                class="map-reset"
-                type="button"
-                @click="emit('map-filter', 'all')"
-              >
-                Показать всю технику
-              </button>
-            </p>
-          </div>
-          <div class="map-footer">
-            <p class="legend">
-              <span class="legend-arrow" aria-hidden="true">↗</span> Направление движения
-              <span class="legend-divider">·</span> Устаревшие данные — приглушённый цвет
-            </p>
-            <label class="map-names-toggle"
-              ><input
-                type="checkbox"
-                :checked="showVehicleNames"
-                @change="emit('show-vehicle-names', ($event.target as HTMLInputElement).checked)"
-              />Названия техники</label
-            >
-          </div>
-        </section>
-        <section class="panel points-panel" aria-labelledby="points-title">
-          <div class="section-title">
-            <div>
-              <span class="section-kicker">ПУНКТЫ И ОЧЕРЕДИ</span>
-              <h2 id="points-title">Пункты погрузки</h2>
+        </div>
+        <div class="points" role="region" aria-label="Список пунктов погрузки" tabindex="0">
+          <article
+            v-for="p in state?.points"
+            :key="p.point_id"
+            :data-point-id="p.point_id"
+            :data-mode="p.mode"
+          >
+            <div class="point-heading">
+              <h3>{{ p.name }}</h3>
+              <span class="mode-badge" :class="p.mode">{{
+                p.mode === 'auto' ? 'Авто' : 'Ручной'
+              }}</span>
             </div>
-            <span class="section-caption">Очереди и режимы работы</span>
-          </div>
-          <div class="points">
-            <article
-              v-for="p in state?.points"
-              :key="p.point_id"
-              :data-point-id="p.point_id"
-              :data-mode="p.mode"
+            <div class="point-queue">
+              <p v-if="!p.queue.length" class="queue-empty">Очередь свободна</p>
+              <p v-for="q in p.queue" :key="q.vehicle_id" class="queue-row">
+                <b>{{
+                  state?.vehicles.find((v) => v.vehicle_id === q.vehicle_id)?.name ?? q.vehicle_id
+                }}</b>
+                <span
+                  >{{ siteTime(q.eta, me!.site.tz) }}<small>ожидание {{ q.wait_s }} с</small></span
+                >
+              </p>
+            </div>
+            <button
+              v-if="me?.role === 'dispatcher'"
+              :disabled="busy"
+              @click="emit('command', 'points', p, p.mode === 'auto' ? 'manual' : 'auto')"
             >
-              <div class="point-heading">
-                <h3>{{ p.name }}</h3>
-                <span class="mode-badge" :class="p.mode">{{
-                  p.mode === 'auto' ? 'Авто' : 'Ручной'
-                }}</span>
-              </div>
-              <div class="point-queue">
-                <p v-if="!p.queue.length" class="queue-empty">Очередь свободна</p>
-                <p v-for="q in p.queue" :key="q.vehicle_id" class="queue-row">
-                  <b>{{
-                    state?.vehicles.find((v) => v.vehicle_id === q.vehicle_id)?.name ?? q.vehicle_id
-                  }}</b>
-                  <span
-                    >{{ siteTime(q.eta, me!.site.tz)
-                    }}<small>ожидание {{ q.wait_s }} с</small></span
-                  >
-                </p>
-              </div>
-              <button
-                v-if="me?.role === 'dispatcher'"
-                :disabled="busy"
-                @click="emit('command', 'points', p, p.mode === 'auto' ? 'manual' : 'auto')"
-              >
-                {{ p.mode === 'auto' ? 'В ручной режим' : 'В авторежим'
-                }}<span aria-hidden="true">↗</span>
-              </button>
-            </article>
-          </div>
-        </section>
-      </div>
+              {{ p.mode === 'auto' ? 'В ручной режим' : 'В авторежим'
+              }}<span aria-hidden="true">↗</span>
+            </button>
+          </article>
+        </div>
+      </section>
+      <section class="panel map-panel" aria-labelledby="map-title">
+        <div class="section-title">
+          <h2 id="map-title">Мониторинг техники</h2>
+          <span class="panel-tag">Локальная схема · 6 × 4 км</span>
+        </div>
+        <div class="map-filters" role="group" aria-label="Состояние техники на карте">
+          <button
+            v-for="filter in mapFilters"
+            :key="filter.value"
+            type="button"
+            :aria-pressed="mapFilter === filter.value"
+            @click="emit('map-filter', filter.value)"
+          >
+            <span
+              v-if="filter.value !== 'all'"
+              class="state-dot"
+              :class="filter.value"
+              aria-hidden="true"
+            ></span>
+            {{ filter.label }}
+          </button>
+        </div>
+        <div class="map-view">
+          <SiteScheme
+            v-if="state"
+            :vehicles="mapVehicles"
+            :points="state.points"
+            :now="now"
+            :show-vehicle-names="showVehicleNames"
+          />
+          <div v-else class="map-loading" role="status">Подключение к площадке…</div>
+          <p v-if="state && !mapVehicles.length" class="map-empty" role="status">
+            Нет техники с выбранным состоянием
+            <button
+              v-if="mapFilter !== 'all'"
+              class="map-reset"
+              type="button"
+              @click="emit('map-filter', 'all')"
+            >
+              Показать всю технику
+            </button>
+          </p>
+        </div>
+        <div class="map-footer">
+          <p class="legend">
+            <span class="legend-arrow" aria-hidden="true">↗</span> Направление движения
+            <span class="legend-divider">·</span> Устаревшие данные — приглушённый цвет
+          </p>
+          <label class="map-names-toggle"
+            ><input
+              type="checkbox"
+              :checked="showVehicleNames"
+              @change="emit('show-vehicle-names', ($event.target as HTMLInputElement).checked)"
+            />Названия техники</label
+          >
+        </div>
+      </section>
       <aside class="panel decisions-panel" aria-labelledby="decisions-title">
         <div class="section-title">
           <div>
@@ -178,7 +170,7 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
           </div>
           <span class="pending-badge">{{ pending }} ожидают</span>
         </div>
-        <div class="decisions-feed">
+        <div class="decisions-feed" role="region" aria-label="Лента решений" tabindex="0">
           <p v-if="state && !state.decisions.length" class="feed-empty">
             Новые решения появятся здесь автоматически
           </p>
@@ -242,9 +234,6 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
           </article>
         </div>
       </aside>
-    </div>
-    <div class="page-footer">
-      <span>Диспетчерская</span><span>Координаты в локальной системе площадки</span>
     </div>
   </main>
 </template>
