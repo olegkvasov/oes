@@ -9,7 +9,7 @@ const point = {
   version: 1,
   queue: [],
 };
-it('после неопределённого результата повтор сохраняет ключ, версию и тело', () => {
+it('retry preserves key, version, and body after an unknown outcome', () => {
   const attempt = new CommandAttempt(createCommandIntent('points', point, 'manual', 'key'));
   expect(attempt.begin()).toBe(true);
   expect(attempt.begin()).toBe(false);
@@ -27,7 +27,7 @@ it('после неопределённого результата повтор 
   attempt.complete();
   expect(attempt.begin()).toBe(false);
 });
-it('403 и 409 завершают попытку без повторной отправки', () => {
+it('403 and 409 finish an attempt without retrying', () => {
   const attempt = new CommandAttempt(createCommandIntent('points', point, 'manual', 'key'));
   attempt.begin();
   attempt.fail(true);

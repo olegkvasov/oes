@@ -8,6 +8,7 @@ import globals from 'globals';
 export default tseslint.config(
   {
     ignores: [
+      '.agents/skills/**',
       'node_modules/**',
       'dist/**',
       'coverage/**',

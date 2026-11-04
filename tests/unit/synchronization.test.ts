@@ -32,8 +32,8 @@ const v: Vehicle = {
   last_seen: at,
 };
 const initial: Snapshot = { seq: 10, at, vehicles: [v], points: [], decisions: [d] };
-describe('Состояние потока', () => {
-  it('не применяет события после пропуска и восстанавливается снимком', () => {
+describe('Stream state', () => {
+  it('rejects events after a gap and recovers with a snapshot', () => {
     const sync = new Synchronization();
     sync.reset(initial);
     expect(sync.apply({ seq: 12, at, type: 'vehicle', data: { ...v, x_m: 12 } })).toBe('recover');
@@ -43,7 +43,7 @@ describe('Состояние потока', () => {
     expect(sync.apply({ seq: 11, at, type: 'vehicle', data: v })).toBe('ignore');
     expect(sync.snapshot(Date.parse(at)).vehicles[0]?.x_m).toBe(12);
   });
-  it('защищает новый HTTP-ответ от старого события, сохраняя seq', () => {
+  it('protects a newer HTTP response from an older event while retaining seq', () => {
     const sync = new Synchronization();
     sync.reset(initial);
     sync.accept({ ...d, status: 'cancelled', version: 3 });
@@ -51,29 +51,29 @@ describe('Состояние потока', () => {
     expect(sync.seq).toBe(11);
     expect(sync.snapshot(Date.parse(at)).decisions[0]?.status).toBe('cancelled');
   });
-  it('удаляет решения старше часа', () => {
+  it('removes decisions older than one hour', () => {
     const sync = new Synchronization();
     sync.reset(initial);
     expect(sync.snapshot(Date.parse(at) + 3600001).decisions).toEqual([]);
   });
-  it('новый снимок полностью заменяет набор объектов', () => {
+  it('new snapshot replaces the complete object set', () => {
     const sync = new Synchronization();
     sync.reset(initial);
     sync.reset({ ...initial, vehicles: [], decisions: [] });
     expect(sync.snapshot(Date.parse(at)).vehicles).toEqual([]);
   });
 });
-it('порог устаревания — строго больше 30 секунд', () => {
+it('staleness threshold is strictly greater than 30 seconds', () => {
   expect(isStale(v, Date.parse(at) + 30000)).toBe(false);
   expect(isStale(v, Date.parse(at) + 30001)).toBe(true);
 });
-it('проверяет входные данные и сохраняет reason как обычную строку', () => {
+it('validates input and preserves reason as plain text', () => {
   expect(snapshotSchema.parse(initial).decisions[0]?.reason).toBe(d.reason);
   expect(
     eventSchema.safeParse({ seq: 11, at, type: 'vehicle', data: { ...v, x_m: 'bad' } }).success,
   ).toBe(false);
 });
-it('ответ команды во время загрузки снимка не откатывается старым снимком', () => {
+it('an older snapshot does not roll back a command response received while loading', () => {
   const sync = new Synchronization();
   sync.reset(initial, [{ ...d, status: 'cancelled', version: 2 }]);
   expect(sync.snapshot(Date.parse(at)).decisions[0]?.status).toBe('cancelled');

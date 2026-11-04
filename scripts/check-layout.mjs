@@ -15,9 +15,10 @@ function walk(directory = '.') {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (ignored.has(entry.name)) continue;
     const file = path.join(directory, entry.name).replaceAll('\\', '/');
+    // Installed third-party skills keep their upstream layout and documentation.
+    if (file === '.agents/skills') continue;
     if (entry.isDirectory()) {
-      if (['e2e', 'perf', 'docs'].includes(file))
-        errors.push(`Недопустимый корневой каталог: ${file}`);
+      if (['e2e', 'perf', 'docs'].includes(file)) errors.push(`Disallowed root directory: ${file}`);
       walk(file);
       continue;
     }
@@ -26,16 +27,16 @@ function walk(directory = '.') {
       !file.startsWith('documentation/') &&
       !['README.md', 'AGENTS.md'].includes(file)
     )
-      errors.push(`Документация вне documentation/: ${file}`);
+      errors.push(`Documentation outside documentation/: ${file}`);
     if (
       /(?:\.(?:test|spec)\.[cm]?[jt]sx?$|(?:playwright|vitest)\.config\.)/.test(file) &&
       !file.startsWith('tests/')
     )
-      errors.push(`Тест или его конфигурация вне tests/: ${file}`);
+      errors.push(`Test or test configuration outside tests/: ${file}`);
   }
 }
 walk();
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exitCode = 1;
-} else console.log('Размещение документации и тестов проверено');
+} else console.log('Documentation and test layout checks passed');

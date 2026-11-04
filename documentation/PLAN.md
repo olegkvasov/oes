@@ -1,24 +1,30 @@
-# Запуск за 10 недель
+# Proposed ten-week rollout
 
-| Задача                  | Результат и приёмка                                                         | Зависимости | Исполнитель       |
-| ----------------------- | --------------------------------------------------------------------------- | ----------- | ----------------- |
-| 1. Инвентаризация       | Реестр 30 экранов, ролей и переходов подтверждён операторами                | —           | middle + агент    |
-| 2. Контрольные сценарии | Записи рабочих смен и примеры входов/выходов покрывают критические операции | 1           | lead              |
-| 3. Контракт             | Снимок, поток, команды и ошибки согласованы с backend                       | 2           | lead              |
-| 4. Каркас               | CI ловит нарушения границ, типов и ответственности                          | 3           | агент, ревью lead |
-| 5. Поток                | Восстановление после потерь подтверждено тестами                            | 3, 4        | lead              |
-| 6. Решения и команды    | Отмена, конфликт, таймаут и права проходят E2E                              | 5           | middle            |
-| 7. Схема и очереди      | Данные соответствуют серверу при 1000 машинах                               | 5           | middle + агент    |
-| 8. Приёмка              | Матрица старого поведения без необъяснённых расхождений                     | 6, 7        | lead              |
-| 9. Пилот                | Теневая эксплуатация и 12-часовой прогон приняты площадкой                  | 8           | lead + middle     |
-| 10. Переключение        | Диспетчеры обучены, откат проверен, старые экраны выключены                 | 9           | lead              |
+This plan addresses five legacy Vue 2/React applications with approximately 30 screens, one frontend lead, one middle developer, and AI agents. It is a migration proposal, not a completed-work report.
 
-Агент извлекает маршруты, сетевые контракты, проверки прав и скрытые условия из Vue 2/React. Middle воспроизводит найденное в браузере, lead подтверждает критические сценарии у диспетчера. Каждое поведение связывается с кодом, записью и тестом; отсутствие документации не трактуется как отсутствие требования.
+| Task                      | Deliverable and acceptance                                           | Depends on | Owner              |
+| ------------------------- | -------------------------------------------------------------------- | ---------- | ------------------ |
+| 1. Inventory              | Register of screens, roles, and transitions confirmed by operators   | —          | Middle + agent     |
+| 2. Reference scenarios    | Shift recordings and input/output examples cover critical operations | 1          | Lead               |
+| 3. Contract               | Snapshot, stream, commands, and errors agreed with backend           | 2          | Lead               |
+| 4. Foundation             | CI rejects boundary, type, and responsibility violations             | 3          | Agent; lead review |
+| 5. Stream                 | Fault recovery demonstrated by tests                                 | 3, 4       | Lead               |
+| 6. Decisions and commands | Cancellation, conflicts, timeouts, and permissions pass E2E          | 5          | Middle             |
+| 7. Diagram and queues     | Display matches server state with 1000 vehicles                      | 5          | Middle + agent     |
+| 8. Acceptance             | Legacy behaviour matrix has no unexplained differences               | 6, 7       | Lead               |
+| 9. Pilot                  | Site accepts shadow operation and a 12-hour run                      | 8          | Lead + middle      |
+| 10. Cutover               | Operators trained, rollback tested, old dispatch screens disabled    | 9          | Lead               |
 
-К концу второй недели: инвентаризация, согласованный объём первой площадки, контракт, прототип потока, CI и критерии пилота. Недели 3–6 — реализация, 7–8 — приёмка и нагрузка, 9 — пилот, 10 — переключение.
+Agents extract routes, network contracts, permission checks, and hidden conditions from legacy code. The middle developer reproduces findings in a browser; the lead confirms critical scenarios with dispatchers. Every behaviour links to source, a recording, and a test. Missing documentation is not evidence that a requirement does not exist.
 
-Агентам поручаются ограниченные изменения с критериями приёмки, тестовые данные и документация. Человек проверяет команды, права, восстановление состояния и изменения контрактов. MR содержит поведение до/после, доказательства проверок и ограничения. Агент не утверждает собственный MR; CI обязателен.
+By the end of week two, deliver the inventory, agreed first-site scope, contract, stream prototype, CI, and pilot acceptance criteria. Weeks 3–6 cover implementation, weeks 7–8 acceptance and performance, week 9 the pilot, and week 10 cutover.
 
-Риски: скрытые правила старых экранов — сразу записать смену с диспетчером; нестабильный поток — согласовать replay/reset и тестировать отказы; перегруз команды — зафиксировать минимальный объём первой площадки и резерв на пилот.
+Assign agents bounded changes with acceptance criteria, fixtures, and documentation. A human reviews commands, permissions, state recovery, and contract changes. Each MR describes before/after behaviour, verification evidence, and limitations. Agents do not approve their own MRs; CI must pass.
 
-До запуска не переносим все 30 экранов, не строим универсальную дизайн-систему, не переписываем backend и не добавляем географическую карту. Выключение старого диспетчерского экрана только после приёмки и проверки отката.
+| Main risk               | First action                                                    |
+| ----------------------- | --------------------------------------------------------------- |
+| Hidden legacy rules     | Record an operator's shift and validate the behaviour inventory |
+| Unreliable event stream | Agree replay/reset semantics and test injected faults           |
+| Team capacity           | Freeze minimum first-site scope and reserve pilot time          |
+
+Before launch, do not migrate all 30 screens, build a universal design system, rewrite the backend, or add a geographic map. Disable old dispatch screens only after acceptance and a successful rollback rehearsal.

@@ -2,12 +2,14 @@
 import type { Snapshot, Me, Point, Decision, Vehicle, VehicleMapFilter } from '../helpers/model';
 import { siteTime } from '../helpers/model';
 import SiteScheme from './SiteScheme.vue';
+import DecisionFeed from './DecisionFeed.vue';
 defineProps<{
   state?: Snapshot;
   mapFilter: VehicleMapFilter;
   showVehicleNames: boolean;
   mapVehicles: Vehicle[];
   me?: Me;
+  status: string;
   connectionError: string;
   error: string;
   retry: boolean;
@@ -107,7 +109,17 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
       </section>
       <section class="panel map-panel" aria-labelledby="map-title">
         <div class="section-title">
-          <h2 id="map-title">Мониторинг техники</h2>
+          <div class="map-heading">
+            <h2 id="map-title">Мониторинг техники</h2>
+            <span
+              class="connection-status"
+              :class="{ connected: status === 'Подключено' }"
+              data-testid="connection-status"
+              :data-connected="status === 'Подключено'"
+              role="status"
+              >{{ status }}</span
+            >
+          </div>
           <span class="panel-tag">Локальная схема · 6 × 4 км</span>
         </div>
         <div class="map-filters" role="group" aria-label="Состояние техники на карте">
@@ -170,17 +182,8 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
           </div>
           <span class="pending-badge">{{ pending }} ожидают</span>
         </div>
-        <div class="decisions-feed" role="region" aria-label="Лента решений" tabindex="0">
-          <p v-if="state && !state.decisions.length" class="feed-empty">
-            Новые решения появятся здесь автоматически
-          </p>
-          <article
-            v-for="d in state?.decisions.slice(0, 100)"
-            :key="d.decision_id"
-            :data-decision-id="d.decision_id"
-            :data-status="d.status"
-            class="decision"
-          >
+        <DecisionFeed v-slot="{ decision: d }" :decisions="state?.decisions.slice(0, 100) ?? []">
+          <article :data-decision-id="d.decision_id" :data-status="d.status" class="decision">
             <div class="decision-top">
               <b
                 ><span class="vehicle-symbol" aria-hidden="true"
@@ -232,7 +235,7 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
               </button>
             </footer>
           </article>
-        </div>
+        </DecisionFeed>
       </aside>
     </div>
   </main>

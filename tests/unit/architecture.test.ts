@@ -18,44 +18,44 @@ function check(files: Record<string, string>) {
     rmSync(root, { recursive: true, force: true });
   }
 }
-it('отклоняет прямой импорт внутреннего файла другого модуля', () => {
+it('rejects direct imports of another module internal file', () => {
   const result = check({ 'modules/a/index.ts': "import {x} from '../b/helpers/x';" });
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain('Межмодульный импорт');
+  expect(result.stderr).toContain('Cross-module imports');
 });
-it('отклоняет импорт API в презентационном компоненте', () => {
+it('rejects API imports in a presentational component', () => {
   const result = check({
     'modules/a/components/Card.vue': "<script setup>import {get} from '../api/service';</script>",
   });
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain('Компонент');
+  expect(result.stderr).toContain('Component');
 });
-it('отклоняет fetch вне общего клиента', () => {
+it('rejects fetch outside the shared client', () => {
   const result = check({ 'modules/a/helpers/load.ts': "fetch('/api/snapshot');" });
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain('Сетевой доступ');
+  expect(result.stderr).toContain('Network access');
 });
-it('отклоняет общий HTTP-клиент вне api', () => {
+it('rejects shared HTTP client usage outside api', () => {
   const result = check({
     'modules/a/helpers/load.ts': "import {request as load} from '../../transport';",
   });
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain('только в api');
+  expect(result.stderr).toContain('only in api');
 });
-it('обнаруживает цикл через публичные точки входа', () => {
+it('detects a cycle through public entry points', () => {
   const result = check({
     'modules/a/index.ts': "import '../b';",
     'modules/b/index.ts': "import '../a';",
   });
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain('Цикл');
+  expect(result.stderr).toContain('cycle');
 });
-it('разрешает общий клиент в api', () => {
+it('allows the shared client in api', () => {
   expect(
     check({ 'modules/a/api/service.ts': "import {request} from '../../transport';" }).status,
   ).toBe(0);
 });
-it('отклоняет namespace-доступ к HTTP из helpers', () => {
+it('rejects namespace HTTP access from helpers', () => {
   expect(
     check({
       'modules/a/helpers/load.ts':
@@ -63,7 +63,7 @@ it('отклоняет namespace-доступ к HTTP из helpers', () => {
     }).status,
   ).toBe(1);
 });
-it('отклоняет динамический импорт внутренностей', () => {
+it('rejects dynamic imports of module internals', () => {
   expect(
     check({
       'modules/a/index.ts': "export const load=()=>import('../b/helpers/value');",
@@ -71,7 +71,7 @@ it('отклоняет динамический импорт внутренно�
     }).status,
   ).toBe(1);
 });
-it('отклоняет цикл внутри одного модуля', () => {
+it('rejects a cycle within a module', () => {
   expect(
     check({
       'modules/a/helpers/one.ts': "import './two';",
@@ -79,12 +79,12 @@ it('отклоняет цикл внутри одного модуля', () => {
     }).status,
   ).toBe(1);
 });
-it('отклоняет функции вне предусмотренных слоёв', () => {
+it('rejects functions outside permitted layers', () => {
   expect(check({ 'modules/a/calculate.ts': 'export function calculate(){return 1;}' }).status).toBe(
     1,
   );
 });
-it('отклоняет API, спрятанный за публичным реэкспортом', () => {
+it('rejects API access hidden behind a public re-export', () => {
   expect(
     check({
       'modules/a/components/View.vue': "<script setup>import {load} from '../../b';</script>",
@@ -92,4 +92,33 @@ it('отклоняет API, спрятанный за публичным реэ�
       'modules/b/api/load.ts': 'export const load=()=>1;',
     }).status,
   ).toBe(1);
+});
+it.each([
+  "const send = fetch; send('/api');",
+  "const send = window.fetch.bind(window); send('/api');",
+  "const { fetch: send } = globalThis; send('/api');",
+  "const send = globalThis['fetch']; send('/api');",
+  "const Socket = WebSocket; new Socket('ws://localhost');",
+  'const Request = XMLHttpRequest; new Request();',
+])('rejects bypassing the shared client through a network API reference: %s', (source) => {
+  const result = check({ 'modules/a/helpers/load.ts': source });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('Network access');
+});
+it.each([
+  'export const calculate = () => 1;',
+  'export const calculate = function () { return 1; };',
+  'export const Model = class {};',
+])('rejects function and class variables outside permitted layers: %s', (source) => {
+  const result = check({ 'modules/a/calculate.ts': source });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('Functions and classes');
+});
+it('allows network API types and functions in permitted layers', () => {
+  expect(
+    check({
+      'modules/a/helpers/value.ts': 'export const value = () => 1; type Socket = WebSocket;',
+      'modules/transport/api/client.ts': 'export const send = fetch;',
+    }).status,
+  ).toBe(0);
 });

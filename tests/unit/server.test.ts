@@ -9,8 +9,8 @@ function server(role = 'dispatcher') {
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((app) => app.close()));
 });
-describe('Контракт команд через Fastify inject (без открытия портов)', () => {
-  it('повторяет ответ без второго выполнения, даже после изменения версии', async () => {
+describe('Command contract through Fastify inject (without opening ports)', () => {
+  it('replays the response without another execution even after a version change', async () => {
     const app = server();
     const initial = (await app.inject('/api/snapshot')).json();
     const d = initial.decisions[0];
@@ -26,7 +26,7 @@ describe('Контракт команд через Fastify inject (без отк
     expect(second.json()).toEqual(first.json());
     expect((await app.inject('/debug/state')).json().executions.same).toBe(1);
   });
-  it('409 возвращает актуальный объект', async () => {
+  it('409 returns the current object', async () => {
     const app = server();
     const d = (await app.inject('/api/snapshot')).json().decisions[0];
     await app.inject({
@@ -44,7 +44,7 @@ describe('Контракт команд через Fastify inject (без отк
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ status: 'cancelled', version: 2 });
   });
-  it('наблюдателю запрещено изменять состояние', async () => {
+  it('observer cannot change state', async () => {
     const app = server('observer');
     expect((await app.inject('/api/me')).json().role).toBe('observer');
     const response = await app.inject({
@@ -56,7 +56,7 @@ describe('Контракт команд через Fastify inject (без отк
     expect(response.statusCode).toBe(403);
     expect((await app.inject('/debug/state')).json().executions).toEqual({});
   });
-  it('отклоняет неизвестный маршрут и недопустимый режим', async () => {
+  it('rejects an unknown route and an invalid mode', async () => {
     const app = server();
     const headers = { 'idempotency-key': 'bad', 'if-match': '1' };
     expect(

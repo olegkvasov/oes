@@ -26,6 +26,7 @@ const dataStale = ref(false);
 const now = ref(Date.now());
 const busy = ref(false);
 const retry = ref<() => Promise<void>>();
+let unresolvedAttempt: CommandAttempt | undefined;
 const sync = new Synchronization();
 let ws: WebSocket | undefined;
 let disposed = false;
@@ -44,6 +45,13 @@ const pending = computed(
 function publish() {
   state.value = sync.snapshot(now.value);
   dirty = false;
+  if (import.meta.env.VITE_PERF === '1')
+    Object.assign(window, {
+      __dispatchPerf: {
+        vehicles: state.value.vehicles.length,
+        decisions: state.value.decisions.length,
+      },
+    });
   if (import.meta.env.VITE_E2E === '1')
     Object.assign(window, { __dispatchState: structuredClone(state.value) });
 }
@@ -129,13 +137,23 @@ async function recover() {
     }
   }
 }
-async function act(
-  kind: 'decisions' | 'points',
-  obj: Decision | Point,
-  mode?: Point['mode'],
-  attempt = new CommandAttempt(createCommandIntent(kind, obj, mode, crypto.randomUUID())),
-) {
+async function act(kind: 'decisions' | 'points', obj: Decision | Point, mode?: Point['mode']) {
+  if (busy.value) return;
+  const id = 'decision_id' in obj ? obj.decision_id : obj.point_id;
+  if (
+    unresolvedAttempt &&
+    (unresolvedAttempt.intent.kind !== kind ||
+      unresolvedAttempt.intent.id !== id ||
+      unresolvedAttempt.intent.mode !== mode)
+  ) {
+    error.value = 'Сначала повторите команду с неизвестным результатом, затем выполните новую.';
+    return;
+  }
+  const attempt =
+    unresolvedAttempt ??
+    new CommandAttempt(createCommandIntent(kind, obj, mode, crypto.randomUUID()));
   if (!attempt.begin()) return;
+  unresolvedAttempt = attempt;
   busy.value = true;
   error.value = '';
   retry.value = undefined;
@@ -159,9 +177,10 @@ async function act(
       if (e.status === 409) accept(e.body as Decision | Point);
     } else {
       error.value = 'Ответ не получен. Команда могла выполниться. Повтор безопасен.';
-      retry.value = () => act(kind, original, mode, attempt);
+      retry.value = () => act(kind, original, mode);
     }
   } finally {
+    if (attempt.state !== 'unknown') unresolvedAttempt = undefined;
     busy.value = false;
   }
 }
@@ -202,6 +221,7 @@ onUnmounted(() => {
     :show-vehicle-names="showVehicleNames"
     :map-filter="mapFilter"
     :map-vehicles="mapVehicles"
+    :status="status"
     :connection-error="connectionError"
     :error="error"
     :retry="Boolean(retry)"

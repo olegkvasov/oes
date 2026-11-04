@@ -3,6 +3,9 @@ const scenario = process.env.SCENARIO ?? 'normal';
 test.describe.configure({ mode: 'serial' });
 async function ready(page: Page) {
   await page.goto('/');
+  await expect(page.getByTestId('connection-status')).toHaveAttribute('data-connected', 'true', {
+    timeout: 15000,
+  });
   await expect(page.getByRole('img', { name: 'Схема площадки: пункты и машины' })).toBeVisible({
     timeout: 15000,
   });
@@ -39,11 +42,13 @@ async function compareDecisions(page: Page, request: APIRequestContext) {
         { timeout: 20000 },
       )
       .toEqual(normalize(server));
-    for (const d of server.decisions.slice(0, 100))
+    for (const d of server.decisions.slice(0, 100)) {
+      await page.locator(`[data-decision-slot-id="${d.decision_id}"]`).scrollIntoViewIfNeeded();
       await expect(page.locator(`[data-decision-id="${d.decision_id}"]`)).toHaveAttribute(
         'data-status',
         d.status,
       );
+    }
     for (const p of server.points)
       await expect(page.locator(`[data-point-id="${p.point_id}"]`)).toHaveAttribute(
         'data-mode',
@@ -53,7 +58,7 @@ async function compareDecisions(page: Page, request: APIRequestContext) {
     await request.post('http://127.0.0.1:3001/debug/pause', { data: { paused: false } });
   }
 }
-test('отмена совпадает с сервером', async ({ page, request }) => {
+test('cancellation matches server state', async ({ page, request }) => {
   test.skip(scenario !== 'normal');
   await ready(page);
   const initial = await state(request);
@@ -69,7 +74,7 @@ test('отмена совпадает с сервером', async ({ page, reque
   expect(Object.values(after.executions).every((count) => count === 1)).toBe(true);
   await compareDecisions(page, request);
 });
-test('страница не загружает внешние ресурсы', async ({ page, request }) => {
+test('page loads no external resources', async ({ page, request }) => {
   test.skip(scenario !== 'normal');
   const external: string[] = [];
   page.on('request', (r) => {
@@ -79,7 +84,7 @@ test('страница не загружает внешние ресурсы', a
   expect(external).toEqual([]);
   await compareDecisions(page, request);
 });
-test('пять минут потерь, дублей и перестановок', async ({ page, request }) => {
+test('five minutes of dropped, duplicated, and reordered events', async ({ page, request }) => {
   test.skip(scenario !== 'drop,dup,reorder');
   test.setTimeout(360000);
   await ready(page);
@@ -88,7 +93,7 @@ test('пять минут потерь, дублей и перестановок
     await compareDecisions(page, request);
   }
 });
-test('восстановление после reset', async ({ page, request }) => {
+test('recovery after reset', async ({ page, request }) => {
   test.skip(scenario !== 'reset');
   test.setTimeout(170000);
   await ready(page);
@@ -98,7 +103,7 @@ test('восстановление после reset', async ({ page, request }) 
   });
   await compareDecisions(page, request);
 });
-test('таймаут и повтор сохраняют одно выполнение', async ({ page, request }) => {
+test('timeout and retry execute the command once', async ({ page, request }) => {
   test.skip(scenario !== 'slow');
   test.setTimeout(45000);
   await ready(page);
@@ -118,7 +123,41 @@ test('таймаут и повтор сохраняют одно выполне�
   expect(Object.values(after.executions)).toEqual([1]);
   await compareDecisions(page, request);
 });
-test('устаревшие машины после 30 секунд', async ({ page, request }) => {
+test('primary action retries the original request after a network error', async ({
+  page,
+  request,
+}) => {
+  test.skip(scenario !== 'normal');
+  await request.post('http://127.0.0.1:3001/debug/pause', { data: { paused: true } });
+  try {
+    await ready(page);
+    const attempts: { key: string; version: string; body: string | null }[] = [];
+    await page.route('**/api/points/p-1/mode', async (route) => {
+      const outgoing = route.request();
+      const headers = outgoing.headers();
+      attempts.push({
+        key: headers['idempotency-key']!,
+        version: headers['if-match']!,
+        body: outgoing.postData(),
+      });
+      if (attempts.length === 1) await route.abort('failed');
+      else await route.continue();
+    });
+    const card = page.locator('[data-point-id="p-1"]');
+    await card.getByRole('button', { name: 'В ручной режим' }).click();
+    await expect(page.getByRole('button', { name: 'Повторить команду' })).toBeVisible();
+    await card.getByRole('button', { name: 'В ручной режим' }).click();
+    await expect(card).toHaveAttribute('data-mode', 'manual');
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0]!.key).not.toBe('');
+    expect(attempts[1]).toEqual(attempts[0]);
+    expect((await state(request)).executions[attempts[0]!.key]).toBe(1);
+    await compareDecisions(page, request);
+  } finally {
+    await request.post('http://127.0.0.1:3001/debug/pause', { data: { paused: false } });
+  }
+});
+test('vehicles become stale after 30 seconds', async ({ page, request }) => {
   test.skip(scenario !== 'stale');
   test.setTimeout(50000);
   await ready(page);
@@ -149,7 +188,10 @@ test('устаревшие машины после 30 секунд', async ({ pa
     .toBe(true);
   await compareDecisions(page, request);
 });
-test('наблюдатель не видит действий и получает 403 при обходе UI', async ({ page, request }) => {
+test('observer sees no actions and receives 403 when bypassing the UI', async ({
+  page,
+  request,
+}) => {
   test.skip(scenario !== 'observer');
   await ready(page);
   await expect(page.getByRole('button', { name: 'Отменить', exact: true })).toHaveCount(0);
@@ -161,7 +203,7 @@ test('наблюдатель не видит действий и получае�
   expect(response.status()).toBe(403);
   await compareDecisions(page, request);
 });
-test('интерфейс объясняет отказ 403', async ({ page, request }) => {
+test('UI explains a 403 refusal', async ({ page, request }) => {
   test.skip(scenario !== 'normal');
   await ready(page);
   await page.route('**/api/decisions/*/cancel', (route) =>
@@ -175,7 +217,7 @@ test('интерфейс объясняет отказ 403', async ({ page, requ
   await expect(page.getByRole('alert')).toContainText('Нет прав');
   await compareDecisions(page, request);
 });
-test('409 при исполнении решения до доставки отмены', async ({ page, request }) => {
+test('409 when a decision executes before cancellation arrives', async ({ page, request }) => {
   test.skip(scenario !== 'normal');
   test.setTimeout(90000);
   await ready(page);
@@ -194,6 +236,7 @@ test('409 при исполнении решения до доставки от�
   });
   // The delayed reply must arrive before the client timeout for this conflict test.
   await page.waitForTimeout(Math.max(0, Date.parse(d.execute_at) - Date.now() - 2000));
+  await page.locator(`[data-decision-slot-id="${d.decision_id}"]`).scrollIntoViewIfNeeded();
   await page
     .locator(`[data-decision-id="${d.decision_id}"]`)
     .getByRole('button', { name: 'Отменить', exact: true })
@@ -204,4 +247,35 @@ test('409 при исполнении решения до доставки от�
     'executed',
   );
   await compareDecisions(page, request);
+});
+
+test('feed retains 100 decisions but renders only visible cards', async ({ page, request }) => {
+  test.skip(scenario !== 'normal');
+  await page.route('**/api/snapshot', async (route) => {
+    const snapshot = await (await request.get('http://127.0.0.1:3001/api/snapshot')).json();
+    const original = snapshot.decisions[0];
+    snapshot.decisions = Array.from({ length: 100 }, (_, i) => ({
+      ...original,
+      decision_id: `virtual-${i}`,
+      status: 'executed',
+      created_at: new Date(Date.now() - i * 1000).toISOString(),
+      reason: i === 99 ? 'Длинная причина последнего решения. '.repeat(100) : `Причина ${i}`,
+    }));
+    await route.fulfill({ json: snapshot });
+  });
+  await ready(page);
+  const feed = page.getByRole('region', { name: 'Лента решений', exact: true });
+  await expect(feed.locator('[data-decision-slot-id]')).toHaveCount(100);
+  await expect.poll(() => feed.locator('[data-decision-id]').count()).toBeLessThan(20);
+  const lastSlot = feed.locator('[data-decision-slot-id="virtual-99"]');
+  await lastSlot.scrollIntoViewIfNeeded();
+  const lastCard = feed.locator('[data-decision-id="virtual-99"]');
+  await expect(lastCard).toBeVisible();
+  await expect(lastCard.locator('p')).toHaveText(
+    'Длинная причина последнего решения. '.repeat(100).trim(),
+  );
+  await expect(feed.locator('[data-decision-id="virtual-0"]')).toHaveCount(0);
+  await expect.poll(() => feed.locator('[data-decision-id]').count()).toBeLessThan(20);
+  await feed.locator('[data-decision-slot-id="virtual-0"]').scrollIntoViewIfNeeded();
+  await expect(feed.locator('[data-decision-id="virtual-0"]')).toBeVisible();
 });

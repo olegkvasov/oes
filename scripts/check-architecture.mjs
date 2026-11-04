@@ -11,6 +11,7 @@ function walk(dir) {
 }
 walk(process.argv[2] ?? 'src');
 const errors = [];
+const networkNames = new Set(['fetch', 'XMLHttpRequest', 'WebSocket']);
 const graph = new Map();
 const fileGraph = new Map();
 const absoluteFiles = new Set(files.map((file) => path.resolve(file)));
@@ -50,26 +51,49 @@ for (const file of files) {
       !resolved.endsWith(`/modules/${target}/index.ts`) &&
       !resolved.endsWith(`/modules/${target}`)
     )
-      fail('Межмодульный импорт только через index.ts');
+      fail('Cross-module imports must use index.ts');
     if (component && /\/api(?:\/|$)|store|pinia|transport/i.test(value))
-      fail('Компонент не должен импортировать API/store');
+      fail('Component must not import API/store');
     if (/(?:^|\/)transport(?:\/index(?:\.ts)?)?$/.test(value) && !file.includes('/api/')) {
       const named = ts.isImportDeclaration(node) && node.importClause?.namedBindings;
       const errorOnly =
         named &&
         ts.isNamedImports(named) &&
         named.elements.every((e) => (e.propertyName ?? e.name).text === 'HttpError');
-      if (!errorOnly) fail('HTTP/WS клиент разрешён только в api');
+      if (!errorOnly) fail('HTTP/WS client is allowed only in api');
     }
   }
   function visit(node) {
     if (
-      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
+      (ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isArrowFunction(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isClassExpression(node)) &&
       !file.endsWith('.vue') &&
       !/\/(helpers|utils|api|stores?)\//.test(file) &&
       owner
     )
-      fail('Функции и классы должны находиться в helpers/utils/api/store');
+      fail('Functions and classes must be in helpers/utils/api/store');
+    // Reject references as well as calls: aliases, bind and destructuring must not
+    // smuggle a browser network primitive outside the transport implementation.
+    let typeOnly = false;
+    for (let parent = node.parent; parent; parent = parent.parent) {
+      if (ts.isTypeNode(parent)) {
+        typeOnly = true;
+        break;
+      }
+    }
+    if (
+      !typeOnly &&
+      !file.includes('/transport/api/') &&
+      ((ts.isIdentifier(node) && networkNames.has(node.text)) ||
+        (ts.isElementAccessExpression(node) &&
+          node.argumentExpression &&
+          ts.isStringLiteral(node.argumentExpression) &&
+          networkNames.has(node.argumentExpression.text)))
+    )
+      fail('Network access must use the shared client');
     if (
       ts.isCallExpression(node) &&
       (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
@@ -92,7 +116,7 @@ for (const file of files) {
             !resolved.endsWith(`src/modules/${target}/index`) &&
             !resolved.endsWith(`src/modules/${target}/index.ts`)
           )
-            fail('Межмодульный импорт только через index.ts');
+            fail('Cross-module imports must use index.ts');
         }
         if (
           /(?:^|\/)transport(?:\/index(?:\.ts)?)?$/.test(value) &&
@@ -107,12 +131,12 @@ for (const file of files) {
               ['request', 'connect'].includes((e.propertyName ?? e.name).text),
             )
           )
-            fail('HTTP/WS клиент разрешён только в api');
+            fail('HTTP/WS client is allowed only in api');
         }
         if (component && /\/api(?:\/|$)|store|pinia|transport/i.test(value))
-          fail('Компонент не должен импортировать API/store');
+          fail('Component must not import API/store');
         if (/axios|ky|ofetch/.test(value) && !file.includes('/transport/api/'))
-          fail('HTTP-библиотека вне общего клиента');
+          fail('HTTP library outside the shared client');
       }
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
@@ -121,9 +145,9 @@ for (const file of files) {
         /(?:^|\.)(fetch|XMLHttpRequest|WebSocket)$/.test(name) &&
         !file.includes('/transport/api/')
       )
-        fail('Сетевой доступ только через общий клиент');
+        fail('Network access must use the shared client');
       if (component && /Mutator$|use\w*Store$|request$|command$/.test(name))
-        fail('Побочный эффект в компоненте');
+        fail('Side effect in component');
     }
     ts.forEachChild(node, visit);
   }
@@ -133,7 +157,7 @@ const active = new Set(),
   done = new Set();
 function check(name) {
   if (active.has(name)) {
-    errors.push(`Цикл модулей: ${[...active, name].join(' → ')}`);
+    errors.push(`Module cycle: ${[...active, name].join(' → ')}`);
     return;
   }
   if (done.has(name)) return;
@@ -147,7 +171,7 @@ const visitedFiles = new Set(),
   stack = new Set();
 function visitFile(file) {
   if (stack.has(file)) {
-    errors.push(`Цикл файлов: ${[...stack, file].join(' → ')}`);
+    errors.push(`File cycle: ${[...stack, file].join(' → ')}`);
     return;
   }
   if (visitedFiles.has(file)) return;
@@ -164,7 +188,7 @@ for (const file of fileGraph.keys()) {
     if (seen.has(dep)) return;
     seen.add(dep);
     if (/\/(api|stores?)\//.test(dep))
-      errors.push(`${file}: Компонент транзитивно зависит от API/store: ${dep}`);
+      errors.push(`${file}: Component transitively depends on API/store: ${dep}`);
     for (const child of fileGraph.get(dep) ?? []) inspect(child);
   }
   for (const dep of fileGraph.get(file) ?? []) inspect(dep);
@@ -173,4 +197,4 @@ for (const file of fileGraph.keys()) {
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exitCode = 1;
-} else console.log('Архитектурные проверки пройдены');
+} else console.log('Architecture checks passed');

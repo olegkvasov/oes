@@ -6,7 +6,7 @@ afterEach(async () => {
   await app?.close();
   vi.useRealTimers();
 });
-it('исполнение через 60 секунд меняет назначение машины', async () => {
+it('execution after 60 seconds changes the vehicle destination', async () => {
   vi.useFakeTimers({
     toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
   });
@@ -24,7 +24,7 @@ it('исполнение через 60 секунд меняет назначе�
     after.vehicles.find((v: { vehicle_id: string }) => v.vehicle_id === d.vehicle_id).point_id,
   ).toBe(d.to_point);
 });
-it('ручные пункты не получают новые автоматические решения', async () => {
+it('manual points receive no new automatic decisions', async () => {
   vi.useFakeTimers({
     toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
   });
@@ -43,7 +43,7 @@ it('ручные пункты не получают новые автомати�
 });
 
 it.each([150, 1000])(
-  'распределяет %i машин возле всех пунктов и сохраняет движение',
+  'distributes %i vehicles across all points and preserves movement',
   async (load) => {
     vi.useFakeTimers({
       toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],

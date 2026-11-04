@@ -1,9 +1,10 @@
 node_modules/
+.agents/skills/
 dist/
 coverage/
 test-results/
 playwright-report/
 yarn.lock
-documentation/Tasks.md
+documentation/TASK.md
 documentation/performance/report.md
 tests/.artifacts/
