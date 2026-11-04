@@ -37,9 +37,6 @@ let generation = 0;
 let dirty = false;
 let snapshotCommands: (Point | Decision)[] | undefined;
 let reconnectAttempt = 0;
-const stale = computed(
-  () => state.value?.vehicles.filter((v) => isStale(v, now.value)).length ?? 0,
-);
 const pending = computed(
   () => state.value?.decisions.filter((d) => d.status === 'pending').length ?? 0,
 );
@@ -205,13 +202,11 @@ onUnmounted(() => {
     :show-vehicle-names="showVehicleNames"
     :map-filter="mapFilter"
     :map-vehicles="mapVehicles"
-    :status="status"
     :connection-error="connectionError"
     :error="error"
     :retry="Boolean(retry)"
     :busy="busy"
     :now="now"
-    :stale="stale"
     :pending="pending"
     @show-vehicle-names="showVehicleNames = $event"
     @map-filter="mapFilter = $event"

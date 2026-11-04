@@ -35,7 +35,7 @@ onMounted(() => {
     ctx.clearRect(0, 0, width, height);
     const x = (v: number) => 20 + (v / 6000) * (width - 40),
       y = (v: number) => 20 + (v / 4000) * (height - 40);
-    ctx.strokeStyle = '#203b3e';
+    ctx.strokeStyle = '#1c343a';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 6000; i += 500) {
       ctx.beginPath();
@@ -50,12 +50,13 @@ onMounted(() => {
       ctx.stroke();
     }
     for (const p of props.points) {
-      ctx.fillStyle = p.mode === 'auto' ? '#173f3b' : '#654c26';
-      ctx.fillRect(x(p.x_m) - 40, y(p.y_m) - 20, 80, 40);
-      ctx.fillStyle = '#d9f5ea';
-      ctx.font = '12px system-ui';
-      ctx.textAlign = 'center';
-      ctx.fillText(p.name, x(p.x_m), y(p.y_m) + 4);
+      ctx.beginPath();
+      ctx.arc(x(p.x_m), y(p.y_m), 23, 0, Math.PI * 2);
+      ctx.fillStyle = p.mode === 'auto' ? '#173b38' : '#493c27';
+      ctx.fill();
+      ctx.strokeStyle = p.mode === 'auto' ? '#4f8c7a' : '#bf9754';
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
     const colors = {
       moving_empty: '#6bdcc2',
@@ -99,7 +100,7 @@ onMounted(() => {
     }
     if (props.showVehicleNames) {
       ctx.save();
-      ctx.font = '600 10px system-ui';
+      ctx.font = '500 11px system-ui';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.strokeStyle = '#11272b';
@@ -114,6 +115,26 @@ onMounted(() => {
       }
       ctx.restore();
     }
+    // Draw point labels last so nearby trucks cannot obscure the destination names.
+    ctx.save();
+    ctx.font = '600 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const p of props.points) {
+      const px = x(p.x_m);
+      const py = y(p.y_m) - 40;
+      const labelWidth = ctx.measureText(p.name).width + 24;
+      ctx.beginPath();
+      ctx.roundRect(px - labelWidth / 2, py - 13, labelWidth, 26, 5);
+      ctx.fillStyle = '#203a40';
+      ctx.fill();
+      ctx.strokeStyle = p.mode === 'auto' ? '#4f8c7a' : '#bf9754';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#e4eeed';
+      ctx.fillText(p.name, px, py);
+    }
+    ctx.restore();
     if (import.meta.env.VITE_PERF === '1') {
       const metrics = window as unknown as {
         __canvasPerf?: { frames: number; last: number; samples: number[] };
@@ -138,9 +159,9 @@ onUnmounted(() => cancelAnimationFrame(frame));
 <style scoped>
 canvas {
   width: 100%;
-  height: 440px;
+  height: 480px;
   display: block;
   background: #11272b;
-  border-radius: 10px;
+  border-radius: 6px;
 }
 </style>

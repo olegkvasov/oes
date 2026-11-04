@@ -3,7 +3,9 @@ const scenario = process.env.SCENARIO ?? 'normal';
 test.describe.configure({ mode: 'serial' });
 async function ready(page: Page) {
   await page.goto('/');
-  await expect(page.getByText('● Подключено')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('img', { name: 'Схема площадки: пункты и машины' })).toBeVisible({
+    timeout: 15000,
+  });
 }
 async function state(request: APIRequestContext) {
   return (await request.get('http://127.0.0.1:3001/debug/state')).json();
@@ -91,7 +93,9 @@ test('восстановление после reset', async ({ page, request }) 
   test.setTimeout(170000);
   await ready(page);
   await page.waitForTimeout(125000);
-  await expect(page.getByText('● Подключено')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('img', { name: 'Схема площадки: пункты и машины' })).toBeVisible({
+    timeout: 15000,
+  });
   await compareDecisions(page, request);
 });
 test('таймаут и повтор сохраняют одно выполнение', async ({ page, request }) => {
@@ -119,7 +123,6 @@ test('устаревшие машины после 30 секунд', async ({ pa
   test.setTimeout(50000);
   await ready(page);
   await page.waitForTimeout(31000);
-  await expect(page.getByTestId('stale-count')).not.toHaveText('0');
   await expect
     .poll(() =>
       page.evaluate(() => {

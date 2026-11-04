@@ -8,13 +8,11 @@ defineProps<{
   showVehicleNames: boolean;
   mapVehicles: Vehicle[];
   me?: Me;
-  status: string;
   connectionError: string;
   error: string;
   retry: boolean;
   busy: boolean;
   now: number;
-  stale: number;
   pending: number;
 }>();
 const emit = defineEmits<{
@@ -35,20 +33,14 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
 ];
 </script>
 <template>
+  <a class="skip-link" href="#workspace">К рабочей области</a>
   <header class="app-header">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none">
-          <path d="m4 17 8-12 8 12H4Z" stroke="currentColor" stroke-width="2" />
-          <path d="m9 17 3-5 3 5" stroke="currentColor" stroke-width="2" />
-        </svg>
-      </span>
-      <div>ОПЕРАТОР<span>Управление перевозками</span></div>
-    </div>
-    <div class="header-site">
-      <span>{{ me?.site.name ?? 'Загрузка площадки' }}</span>
-      <span class="connection" :class="{ connected: status === 'Подключено' }">● {{ status }}</span>
-    </div>
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="m4 17 8-12 8 12H4Z" stroke="currentColor" stroke-width="2" />
+        <path d="m9 17 3-5 3 5" stroke="currentColor" stroke-width="2" />
+      </svg>
+    </span>
     <div class="user-profile">
       <span class="user-avatar" aria-hidden="true">{{ me?.name.charAt(0) ?? '—' }}</span>
       <div>
@@ -57,12 +49,11 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
       </div>
     </div>
   </header>
-  <main>
+  <main id="workspace" tabindex="-1">
     <div class="heading">
       <div>
         <div class="eyebrow">Диспетчерская <span>/</span> Мониторинг</div>
         <h1>Обзор площадки</h1>
-        <p>Техника, пункты погрузки и решения в реальном времени</p>
       </div>
       <div class="site-clock">
         <small>Время площадки</small>
@@ -75,37 +66,11 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
       {{ error }}
       <button v-if="retry" :disabled="busy" @click="emit('retry')">Повторить команду</button>
     </div>
-    <section class="metrics" aria-label="Показатели площадки">
-      <article>
-        <small>Техника на площадке</small>
-        <strong>{{ state?.vehicles.length ?? '—' }} <em>машин</em></strong>
-        <span class="metric-note">Общий парк</span>
-      </article>
-      <article>
-        <small>Автоматическое управление</small>
-        <strong
-          >{{ state?.points.filter((p) => p.mode === 'auto').length ?? '—' }}
-          <em>/ {{ state?.points.length ?? '—' }}</em></strong
-        >
-        <span class="metric-note">Пункты в авторежиме</span>
-      </article>
-      <article :class="{ 'metric-attention': pending > 0 }">
-        <small>Решения к исполнению</small><strong>{{ pending }}</strong>
-        <span class="metric-note">Ожидают отправки техники</span>
-      </article>
-      <article :class="{ 'metric-warning': stale > 0 }">
-        <small>Устаревшие данные</small><strong data-testid="stale-count">{{ stale }}</strong>
-        <span class="metric-note">Нет обновлений более 30 секунд</span>
-      </article>
-    </section>
     <div class="workspace">
       <div class="site-column">
         <section class="panel map-panel" aria-labelledby="map-title">
           <div class="section-title">
-            <div>
-              <span class="section-kicker">ПЛОЩАДКА / 01</span>
-              <h2 id="map-title">Схема движения</h2>
-            </div>
+            <h2 id="map-title">Мониторинг техники</h2>
             <span class="panel-tag">Локальная схема · 6 × 4 км</span>
           </div>
           <div class="map-filters" role="group" aria-label="Состояние техники на карте">
@@ -136,12 +101,20 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
             <div v-else class="map-loading" role="status">Подключение к площадке…</div>
             <p v-if="state && !mapVehicles.length" class="map-empty" role="status">
               Нет техники с выбранным состоянием
+              <button
+                v-if="mapFilter !== 'all'"
+                class="map-reset"
+                type="button"
+                @click="emit('map-filter', 'all')"
+              >
+                Показать всю технику
+              </button>
             </p>
           </div>
           <div class="map-footer">
             <p class="legend">
               <span class="legend-arrow" aria-hidden="true">↗</span> Направление движения
-              <span class="legend-divider">·</span> Серый — устаревшие данные
+              <span class="legend-divider">·</span> Устаревшие данные — приглушённый цвет
             </p>
             <label class="map-names-toggle"
               ><input
@@ -155,7 +128,7 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
         <section class="panel points-panel" aria-labelledby="points-title">
           <div class="section-title">
             <div>
-              <span class="section-kicker">ИНФРАСТРУКТУРА / 02</span>
+              <span class="section-kicker">ПУНКТЫ И ОЧЕРЕДИ</span>
               <h2 id="points-title">Пункты погрузки</h2>
             </div>
             <span class="section-caption">Очереди и режимы работы</span>
@@ -200,7 +173,7 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
       <aside class="panel decisions-panel" aria-labelledby="decisions-title">
         <div class="section-title">
           <div>
-            <span class="section-kicker">АВТОМАТИКА / 03</span>
+            <span class="section-kicker">АВТОМАТИЧЕСКОЕ РАСПРЕДЕЛЕНИЕ</span>
             <h2 id="decisions-title">Решения системы</h2>
           </div>
           <span class="pending-badge">{{ pending }} ожидают</span>
@@ -218,7 +191,17 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
           >
             <div class="decision-top">
               <b
-                ><span class="vehicle-symbol" aria-hidden="true">↗</span
+                ><span class="vehicle-symbol" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 28 22"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h15l-3 8H5L2 3Zm3 10h14V6h4l3 5v6H4v-4Z" />
+                    <circle cx="8" cy="17" r="3" fill="currentColor" />
+                    <circle cx="22" cy="17" r="3" fill="currentColor" /></svg></span
                 >{{
                   state?.vehicles.find((v) => v.vehicle_id === d.vehicle_id)?.name ??
                   d.vehicle_id.toUpperCase()
@@ -261,7 +244,7 @@ const mapFilters: { value: VehicleMapFilter; label: string }[] = [
       </aside>
     </div>
     <div class="page-footer">
-      <span>ОПЕРАТОР / Диспетчерская</span><span>Координаты в локальной системе площадки</span>
+      <span>Диспетчерская</span><span>Координаты в локальной системе площадки</span>
     </div>
   </main>
 </template>
